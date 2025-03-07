@@ -12,22 +12,39 @@ type HttpServer struct {
 	server *http.Server
 }
 
-func handler(w http.ResponseWriter, r *http.Request) {
+func handleCORSPreflight(w http.ResponseWriter) {
+	w.Header().Set("Access-Control-Allow-Origin", "http://localhost:5173")
+	w.Header().Set("Access-Control-Allow-Methods", "GET, OPTIONS")
+	w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
+	w.WriteHeader(http.StatusOK)
+}
+
+func handleRootPathRequest(w http.ResponseWriter, r *http.Request) {
 	if r.URL.Path != "/" {
+		log.Printf("Path %s not found\n", r.URL.Path)
 		http.NotFound(w, r)
 		return
 	}
 
+	if r.Method == http.MethodOptions {
+		handleCORSPreflight(w)
+	}
+
+	log.Printf("Received %s request with body: %s\n", r.Method, r.Body)
+
 	response := map[string]string{"message": "Hello World from the server on the container!"}
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Access-Control-Allow-Origin", "http://localhost:5173")
 	w.WriteHeader(http.StatusOK)
-	json.NewEncoder(w).Encode(response)
+	if err := json.NewEncoder(w).Encode(response); err != nil {
+		log.Printf("Failed to encode response: %v\n", err)
+	}
 }
 
 func NewServer(port int) *HttpServer {
 	mux := http.NewServeMux()
 
-	mux.HandleFunc("/", handler)
+	mux.HandleFunc("/", handleRootPathRequest)
 	srv := &http.Server{
 		Addr:    fmt.Sprintf(":%d", port),
 		Handler: mux,
